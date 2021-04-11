@@ -75,5 +75,49 @@ namespace WebApplication.Controllers {
             });
             return View(session);
         }
+
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> StartArchive(string sessionId) {
+            var session = await _context.VonageVideoAPISessions.Include(x => x.Project).Where(x => x.SessionId == sessionId).SingleAsync();
+            await OpenTokFs.Api.Archive.StartAsync(session.Project, new OpenTokFs.RequestTypes.OpenTokArchiveStartRequest(sessionId) {
+                OutputMode = "composed"
+            });
+            return NoContent();
+        }
+
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> StopArchive(string sessionId) {
+            var session = await _context.VonageVideoAPISessions.Include(x => x.Project).Where(x => x.SessionId == sessionId).SingleAsync();
+            var archives = await OpenTokFs.Api.Archive.ListAllAfterAsync(
+                session.Project,
+                DateTimeOffset.UtcNow.AddDays(-1),
+                OpenTokFs.OpenTokSessionId.NewId(sessionId));
+            foreach (var a in archives) {
+                if (a.Status == "started" || a.Status == "paused") {
+                    var stopped = await OpenTokFs.Api.Archive.StopAsync(session.Project, a.Id);
+
+                    for (int i = 0; i < 5 && stopped.Status != "uploaded" && stopped.Status != "available"; i++) {
+                        await Task.Delay(3000);
+                        stopped = await OpenTokFs.Api.Archive.GetAsync(session.Project, a.Id);
+                    }
+
+                    if (stopped.Url != null)
+                        return Redirect(stopped.Url);
+                    else
+                        return Content("Archive stopped, but URL not available");
+                }
+            }
+            return NoContent();
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ListArchives(string sessionId, int max) {
+            var session = await _context.VonageVideoAPISessions.Include(x => x.Project).Where(x => x.SessionId == sessionId).SingleAsync();
+            var archives = await OpenTokFs.Api.Archive.ListAllAsync(
+                session.Project,
+                max,
+                OpenTokFs.OpenTokSessionId.NewId(sessionId));
+            return Ok(archives);
+        }
     }
 }
