@@ -77,10 +77,29 @@ namespace WebApplication.Controllers {
         }
 
         [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> StartArchive(string sessionId) {
+        public async Task<IActionResult> StartArchive(
+            string sessionId,
+            bool hasAudio,
+            bool hasVideo,
+            string layout,
+            string layoutCss,
+            string name,
+            bool composed,
+            string resolution
+        ) {
             var session = await _context.VonageVideoAPISessions.Include(x => x.Project).Where(x => x.SessionId == sessionId).SingleAsync();
             await OpenTokFs.Api.Archive.StartAsync(session.Project, new OpenTokFs.RequestTypes.OpenTokArchiveStartRequest(sessionId) {
-                OutputMode = "composed"
+                HasAudio = hasAudio,
+                HasVideo = hasVideo,
+                Layout = !string.IsNullOrEmpty(layoutCss) ? OpenTokFs.RequestTypes.OpenTokVideoLayout.Custom(layoutCss)
+                : layout == "Best Fit" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.BestFit
+                : layout == "Picture-in-Picture" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.Pip
+                : layout == "Vertical Presentation" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.VerticalPresentation
+                : layout == "Horizontal Presentation" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.HorizontalPresentation
+                : OpenTokFs.RequestTypes.OpenTokVideoLayout.BestFit,
+                Name = name,
+                OutputMode = composed ? "composed" : "individual",
+                Resolution = resolution
             });
             return NoContent();
         }
@@ -108,6 +127,37 @@ namespace WebApplication.Controllers {
                 }
             }
             return NoContent();
+        }
+
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> StartBroadcast(string sessionId) {
+            var session = await _context.VonageVideoAPISessions.Include(x => x.Project).Where(x => x.SessionId == sessionId).SingleAsync();
+            var broadcasts = await OpenTokFs.Api.Broadcast.ListAllAsync(
+                session.Project,
+                int.MaxValue,
+                OpenTokFs.OpenTokSessionId.NewId(sessionId));
+            var broadcast = broadcasts.SingleOrDefault();
+            if (broadcast == null) {
+                broadcast = await OpenTokFs.Api.Broadcast.StartAsync(
+                    session.Project,
+                    new OpenTokFs.RequestTypes.OpenTokBroadcastStartRequest(sessionId) {
+                        Hls = true
+                    });
+            }
+            return View("Player", broadcast);
+        }
+
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> StopBroadcast(string sessionId) {
+            var session = await _context.VonageVideoAPISessions.Include(x => x.Project).Where(x => x.SessionId == sessionId).SingleAsync();
+            var broadcasts = await OpenTokFs.Api.Broadcast.ListAllAsync(
+                session.Project,
+                int.MaxValue,
+                OpenTokFs.OpenTokSessionId.NewId(sessionId));
+            foreach (var b in broadcasts) {
+                await OpenTokFs.Api.Broadcast.StopAsync(session.Project, b.Id);
+            }
+            return View("Player", null);
         }
 
         [HttpGet]

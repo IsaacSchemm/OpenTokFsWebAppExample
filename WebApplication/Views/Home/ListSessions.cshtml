@@ -10,14 +10,6 @@
             <a asp-controller="Home" asp-action="Session" asp-route-id="@p.SessionId">
                 @p.SessionId
             </a>
-            <ul>
-                <li>
-                    <form asp-controller="Home" asp-action="ForgetSession">
-                        <input type="hidden" name="id" value="@p.SessionId" />
-                        <input type="submit" value="Forget session" />
-                    </form>
-                </li>
-            </ul>
         </li>
     }
 </ul>

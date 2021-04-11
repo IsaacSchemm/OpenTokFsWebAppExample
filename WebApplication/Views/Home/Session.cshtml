@@ -1,28 +1,78 @@
 ﻿@model VonageVideoAPISession
 
 @{
-    ViewData["Title"] = "Projects";
+    ViewData["Title"] = Model.SessionId;
 
     string token = ViewBag.Token;
 }
 
+<style type="text/css">
+    label {
+        display: block;
+    }
+</style>
+
 <script src="https://static.opentok.com/v2/js/opentok.js"></script>
 
-<iframe src="about:blank" name="miniframe" style="float: right" width="160" height="90"></iframe>
+<iframe src="about:blank" name="miniframe" style="float: right" width="320" height="180" allowfullscreen></iframe>
 
-<form asp-controller="Home" asp-action="ForgetSession" asp-route-id="@Model.SessionId">
+<form asp-controller="Home" asp-action="ForgetSession" asp-route-id="@Model.SessionId" onsubmit="return confirm('Are you sure?')">
     <input type="submit" value="Forget session" />
 </form>
 
+<hr />
+
 <form asp-controller="Home" asp-action="StartArchive" asp-route-sessionId="@Model.SessionId" target="miniframe">
+    You can start an archive recording. If an archive is already started, an error will be thrown.
+    <label>
+        <input type="checkbox" name="hasAudio" value="true" checked />
+        Has audio
+    </label>
+    <label>
+        <input type="checkbox" name="hasVideo" value="true" checked />
+        Has video
+    </label>
+    <label>
+        Layout
+        <select name="layout">
+            <option>Best Fit</option>
+            <option>Picture-in-Picture</option>
+            <option>Vertical Presentation</option>
+            <option>Horizontal Presentation</option>
+        </select>
+    </label>
+    <label>
+        Or use custom layout CSS (URL):
+        <input name="layoutCss" type="url" />
+    </label>
+    <label>
+        Name
+        <input name="name" type="text" />
+    </label>
+    <label>
+        Output mode
+        <select name="composed">
+            <option value="true">Composed</option>
+            <option value="false">Individual</option>
+        </select>
+    </label>
+    <label>
+        Resolution
+        <select name="composed">
+            <option>640x480</option>
+            <option>1280x720</option>
+        </select>
+    </label>
     <input type="submit" value="Start archive" />
 </form>
 
 <form asp-controller="Home" asp-action="StopArchive" asp-route-sessionId="@Model.SessionId" target="miniframe">
+    When you stop an archive using this button, the resulting video file will be shown to the right (if available and in .mp4 format).
     <input type="submit" value="Stop archive" />
 </form>
 
 <form asp-controller="Home" asp-action="ListArchives" method="get">
+    You can also list archives that have been created for this session.
     <input name="sessionId" value="@Model.SessionId" type="hidden" />
     <label>
         Maximum
@@ -30,6 +80,19 @@
     </label>
     <input type="submit" value="List archives" />
 </form>
+
+<hr />
+
+<form asp-controller="Home" asp-action="StartBroadcast" asp-route-sessionId="@Model.SessionId" target="miniframe">
+    You can start a broadcast. If a broadcast is already started, the existing broadcast will be displayed in the lil' frame to the right (if an HLS version has been created).
+    <input type="submit" value="Start or view broadcast" />
+</form>
+
+<form asp-controller="Home" asp-action="StopBroadcast" asp-route-sessionId="@Model.SessionId" target="miniframe">
+    <input type="submit" value="Stop broadcast (if any)" />
+</form>
+
+<hr />
 
 <div id="container">
 

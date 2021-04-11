@@ -1,0 +1,36 @@
+﻿@model OpenTokFs.ResponseTypes.OpenTokBroadcast
+
+@{
+    Layout = null;
+}
+
+<html>
+<head>
+    <title>@(Model?.BroadcastUrls?.Hls ?? "No broadcast")</title>
+    <script src="//cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style type="text/css">
+        video {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    @if (Model?.BroadcastUrls?.Hls != null) {
+        <video controls src="@Model.BroadcastUrls.Hls"></video>
+        <script type="text/javascript">
+            if (Hls.isSupported()) {
+                const v = document.getElementsByTagName("video")[0];
+                const h = new Hls();
+                h.loadSource(v.src);
+                h.attachMedia(v);
+            }
+        </script>
+    } else { 
+        @:No broadcast is running.
+    }
+</body>
+</html>
