@@ -1,0 +1,46 @@
+﻿@model IEnumerable<VonageVideoAPIProjectCredential>
+
+@{
+    ViewData["Title"] = "Projects";
+}
+
+<p>Add project:</p>
+
+<form asp-controller="Home" asp-action="AddProjectPost" method="post">
+    <label>
+        API key / project ID
+        <input type="text" name="key" />
+    </label>
+    <label>
+        API secret
+        <input type="text" name="secret" />
+    </label>
+    <input type="submit" />
+</form>
+
+<hr />
+
+<ul>
+    @foreach (var p in Model) {
+        <li>
+            @p.ApiKey
+            <ul>
+                <li>
+                    <form asp-controller="Home" asp-action="ForgetProject">
+                        <input type="hidden" name="id" value="@p.ApiKey" />
+                        <input type="submit" value="Forget project" />
+                    </form>
+                </li>
+                <li>
+                    <form asp-controller="Home" asp-action="AddSessionPost" method="post">
+                        <input type="hidden" name="projectId" value="@p.ApiKey" />
+                        <input type="submit" value="Add session" />
+                    </form>
+                </li>
+                <li>
+                    <a asp-controller="Home" asp-action="ListSessions" asp-route-projectId="@p.ApiKey">List sessions</a>
+                </li>
+            </ul>
+        </li>
+    }
+</ul>
