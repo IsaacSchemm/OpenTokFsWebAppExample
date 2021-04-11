@@ -1,14 +1,14 @@
 ﻿@model VonageVideoAPISession
 
 @{
-    ViewData["Title"] = "Projects";
+    ViewData["Title"] = "Session";
 
     string token = ViewBag.Token;
 }
 
 <script src="https://static.opentok.com/v2/js/opentok.js"></script>
 
-<iframe src="about:blank" name="miniframe" style="float: right" width="160" height="90"></iframe>
+<iframe src="about:blank" name="miniframe" style="float: right" width="320" height="140"></iframe>
 
 <form asp-controller="Home" asp-action="ForgetSession" asp-route-id="@Model.SessionId">
     <input type="submit" value="Forget session" />
@@ -122,3 +122,30 @@
     document.getElementById("publish_camera").addEventListener("click", () => publish(undefined));
     document.getElementById("publish_screen").addEventListener("click", () => publish("screen"));
 </script>
+
+@if (true) {
+    <hr />
+
+    <label>
+        ROM image
+        <input type="file" id="romInput" accept=".gb, .gbc, .sgb" />
+    </label>
+
+    <canvas id="canvas" style="image-rendering: pixelated" width="160" height="144"></canvas>
+
+    <button id="publish_game">Publish game video</button>
+
+    <script src="/js/gemuboi-js/js/cpu.js"></script>
+    <script src="/js/gemuboi-js/js/display.js"></script>
+    <script src="/js/gemuboi-js/js/sound.js"></script>
+    <script src="/js/gemuboi-js/js/timer.js"></script>
+    <script src="/js/gemuboi-js/js/joypad.js"></script>
+    <script src="/js/gemuboi-js/js/serial.js"></script>
+    <script src="/js/gemuboi-js/js/cartridge.js"></script>
+    <script src="/js/gemuboi-js/js/rtc.js"></script>
+    <script src="/js/gemuboi-js/js/main.js"></script>
+
+    <script type="text/javascript">
+        document.getElementById("publish_game").addEventListener("click", () => publish(document.getElementById("canvas").captureStream(30).getVideoTracks()[0]));
+    </script>
+}

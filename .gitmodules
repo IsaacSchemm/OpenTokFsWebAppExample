@@ -1,3 +1,6 @@
 [submodule "OpenTokFs"]
 	path = OpenTokFs
 	url = https://github.com/IsaacSchemm/OpenTokFs
+[submodule "WebApplication/wwwroot/js/gemuboi-js"]
+	path = WebApplication/wwwroot/js/gemuboi-js
+	url = https://github.com/danwsong/gemuboi-js
