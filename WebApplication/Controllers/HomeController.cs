@@ -66,5 +66,14 @@ namespace WebApplication.Controllers {
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(ListSessions), new { projectId = projectId });
         }
+
+        [HttpGet]
+        public async Task<IActionResult> Session(string id) {
+            var session = await _context.VonageVideoAPISessions.Include(x => x.Project).Where(x => x.SessionId == id).SingleAsync();
+            ViewBag.Token = OpenTokFs.OpenTokSessionTokens.GenerateToken(session.Project, new OpenTokFs.OpenTokSessionTokenParameters(session.SessionId) {
+                ExpireTime = DateTimeOffset.UtcNow.AddMinutes(1)
+            });
+            return View(session);
+        }
     }
 }

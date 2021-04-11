@@ -7,7 +7,9 @@
 <ul>
     @foreach (var p in Model) {
         <li>
-            @p.SessionId
+            <a asp-controller="Home" asp-action="Session" asp-route-id="@p.SessionId">
+                @p.SessionId
+            </a>
             <ul>
                 <li>
                     <form asp-controller="Home" asp-action="ForgetSession">

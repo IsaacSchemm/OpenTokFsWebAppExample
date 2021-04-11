@@ -1,0 +1,98 @@
+﻿@model VonageVideoAPISession
+
+@{
+    ViewData["Title"] = "Projects";
+
+    string token = ViewBag.Token;
+}
+
+<script src="https://static.opentok.com/v2/js/opentok.js"></script>
+
+<div id="container">
+
+</div>
+
+<button id="publish">Publish</button>
+<button id="unpublish">Unpublish</button>
+
+<script type="text/javascript">
+    const projectId = @Html.Raw(Json.Serialize(Model.Project.ApiKey));
+    const sessionId = @Html.Raw(Json.Serialize(Model.SessionId));
+    const token = @Html.Raw(Json.Serialize(ViewBag.Token));
+
+    const subscribers = [];
+    const session_promise = new Promise((r, x) => {
+        const session = OT.initSession(projectId, sessionId);
+
+        session.on("streamCreated", async event => {
+            console.log("streamCreated", event);
+
+            const session = await session_promise;
+            const subscriber = session.subscribe(event.stream, document.getElementById("container"), {
+                insertMode: "append"
+            }, err => {
+                if (err) {
+                    x(err);
+                } else {
+                    subscribers.push(subscriber);
+                }
+            });
+        });
+        session.on("streamDestroyed", async event => {
+            for (const subscriber of subscribers) {
+                if (subscriber.streamId === event.stream.id) {
+                    session.unsubscribe(subscriber);
+                    // TODO: remove from array
+                }
+            }
+        });
+
+        session.connect(token, err => {
+            if (err) {
+                x(err);
+            } else {
+                r(session);
+            }
+        });
+    });
+
+    const publishers = [];
+    document.getElementById("publish").addEventListener("click", async () => {
+        try {
+            const session = await session_promise;
+
+            const publisher_promise = await new Promise((r, x) => {
+                const publisher = OT.initPublisher(document.getElementById("container"), {
+                    insertMode: "append"
+                }, err => {
+                    if (err) {
+                        x(err);
+                    } else {
+                        r(publisher);
+                    }
+                });
+            });
+
+            const publisher = await publisher_promise;
+
+            publisher.on("destroyed", () => {
+                publisher = null;
+            });
+
+            session.publish(publisher);
+            publishers.push(publisher);
+        } catch (e) {
+            console.error(e);
+        }
+    });
+
+    document.getElementById("unpublish").addEventListener("click", async () => {
+        try {
+            const session = await session_promise;
+            for (const publisher of publishers)
+                session.unpublish(publisher);
+        } catch (e) {
+            console.error(e);
+        }
+    });
+</script>
