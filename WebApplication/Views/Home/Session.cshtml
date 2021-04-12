@@ -14,7 +14,7 @@
 
 <script src="https://static.opentok.com/v2/js/opentok.js"></script>
 
-<iframe src="about:blank" name="miniframe" style="float: right" width="320" height="180" allowfullscreen></iframe>
+<iframe src="about:blank" name="miniframe" style="float: right; resize: both" width="320" height="180" allowfullscreen></iframe>
 
 <form asp-controller="Home" asp-action="ForgetSession" asp-route-id="@Model.SessionId" onsubmit="return confirm('Are you sure?')">
     <input type="submit" value="Forget session" />
@@ -58,7 +58,7 @@
     </label>
     <label>
         Resolution
-        <select name="composed">
+        <select name="resolution">
             <option>640x480</option>
             <option>1280x720</option>
         </select>
@@ -85,6 +85,42 @@
 
 <form asp-controller="Home" asp-action="StartBroadcast" asp-route-sessionId="@Model.SessionId" target="miniframe">
     You can start a broadcast. If a broadcast is already started, the existing broadcast will be displayed in the lil' frame to the right (if an HLS version has been created).
+    <label>
+        Layout
+        <select name="layout">
+            <option>Best Fit</option>
+            <option>Picture-in-Picture</option>
+            <option>Vertical Presentation</option>
+            <option>Horizontal Presentation</option>
+        </select>
+    </label>
+    <label>
+        Or use custom layout CSS (URL):
+        <input name="layoutCss" type="url" />
+    </label>
+    <label>
+        Maximum duration (seconds)
+        <input name="maxDuration" type="number" min="60" max="@(60 * 60 * 10)" value="@(60 * 60 * 4)" />
+    </label>
+    <label>
+        <input type="checkbox" name="hls" value="true" checked />
+        Create HLS stream
+    </label>
+    <label>
+        RTMP server URL (optional):
+        <input name="rtmpServerUrl" type="url" />
+    </label>
+    <label>
+        RTMP stream key (optional):
+        <input name="rtmpStreamName" type="text" />
+    </label>
+    <label>
+        Resolution
+        <select name="resolution">
+            <option>640x480</option>
+            <option>1280x720</option>
+        </select>
+    </label>
     <input type="submit" value="Start or view broadcast" />
 </form>
 

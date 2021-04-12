@@ -92,11 +92,11 @@ namespace WebApplication.Controllers {
                 HasAudio = hasAudio,
                 HasVideo = hasVideo,
                 Layout = !string.IsNullOrEmpty(layoutCss) ? OpenTokFs.RequestTypes.OpenTokVideoLayout.Custom(layoutCss)
-                : layout == "Best Fit" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.BestFit
-                : layout == "Picture-in-Picture" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.Pip
-                : layout == "Vertical Presentation" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.VerticalPresentation
-                : layout == "Horizontal Presentation" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.HorizontalPresentation
-                : OpenTokFs.RequestTypes.OpenTokVideoLayout.BestFit,
+                    : layout == "Best Fit" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.BestFit
+                    : layout == "Picture-in-Picture" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.Pip
+                    : layout == "Vertical Presentation" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.VerticalPresentation
+                    : layout == "Horizontal Presentation" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.HorizontalPresentation
+                    : OpenTokFs.RequestTypes.OpenTokVideoLayout.BestFit,
                 Name = name,
                 OutputMode = composed ? "composed" : "individual",
                 Resolution = resolution
@@ -120,17 +120,28 @@ namespace WebApplication.Controllers {
                         stopped = await OpenTokFs.Api.Archive.GetAsync(session.Project, a.Id);
                     }
 
-                    if (stopped.Url != null)
+                    if (stopped.Url == null)
+                        return Content("Archive stopped, but URL not available");
+                    else if (stopped.Url.EndsWith(".mp4", StringComparison.InvariantCultureIgnoreCase))
                         return Redirect(stopped.Url);
                     else
-                        return Content("Archive stopped, but URL not available");
+                        return Content(stopped.Url, "text/plain");
                 }
             }
             return NoContent();
         }
 
         [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> StartBroadcast(string sessionId) {
+        public async Task<IActionResult> StartBroadcast(
+            string sessionId,
+            string layout,
+            string layoutCss,
+            int maxDuration,
+            bool hls,
+            string rtmpServerUrl,
+            string rtmpStreamName,
+            string resolution
+        ) {
             var session = await _context.VonageVideoAPISessions.Include(x => x.Project).Where(x => x.SessionId == sessionId).SingleAsync();
             var broadcasts = await OpenTokFs.Api.Broadcast.ListAllAsync(
                 session.Project,
@@ -138,11 +149,27 @@ namespace WebApplication.Controllers {
                 OpenTokFs.OpenTokSessionId.NewId(sessionId));
             var broadcast = broadcasts.SingleOrDefault();
             if (broadcast == null) {
+                var req = new OpenTokFs.RequestTypes.OpenTokBroadcastStartRequest(sessionId) {
+                    Layout = !string.IsNullOrEmpty(layoutCss) ? OpenTokFs.RequestTypes.OpenTokVideoLayout.Custom(layoutCss)
+                            : layout == "Best Fit" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.BestFit
+                            : layout == "Picture-in-Picture" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.Pip
+                            : layout == "Vertical Presentation" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.VerticalPresentation
+                            : layout == "Horizontal Presentation" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.HorizontalPresentation
+                            : OpenTokFs.RequestTypes.OpenTokVideoLayout.BestFit,
+                    Duration = TimeSpan.FromSeconds(maxDuration),
+                    Hls = hls,
+                    Resolution = resolution,
+                    Rtmp = new[] {
+                            new OpenTokFs.RequestTypes.OpenTokRtmpDestination {
+                                ServerUrl = rtmpServerUrl,
+                                StreamName = rtmpStreamName
+                            }
+                        }.Where(x => !string.IsNullOrEmpty(x.ServerUrl) && !string.IsNullOrEmpty(x.StreamName))
+                };
+                string json = Newtonsoft.Json.JsonConvert.SerializeObject(req);
                 broadcast = await OpenTokFs.Api.Broadcast.StartAsync(
                     session.Project,
-                    new OpenTokFs.RequestTypes.OpenTokBroadcastStartRequest(sessionId) {
-                        Hls = true
-                    });
+                    req);
             }
             return View("Player", broadcast);
         }
