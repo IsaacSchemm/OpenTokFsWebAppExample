@@ -187,6 +187,34 @@ namespace WebApplication.Controllers {
             return View("Player", null);
         }
 
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> ChangeLayout(string sessionId, string layout, string layoutCss) {
+            var l = !string.IsNullOrEmpty(layoutCss) ? OpenTokFs.RequestTypes.OpenTokVideoLayout.Custom(layoutCss)
+                    : layout == "Best Fit" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.BestFit
+                    : layout == "Picture-in-Picture" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.Pip
+                    : layout == "Vertical Presentation" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.VerticalPresentation
+                    : layout == "Horizontal Presentation" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.HorizontalPresentation
+                    : OpenTokFs.RequestTypes.OpenTokVideoLayout.BestFit;
+            var session = await _context.VonageVideoAPISessions.Include(x => x.Project).Where(x => x.SessionId == sessionId).SingleAsync();
+            var broadcasts = await OpenTokFs.Api.Broadcast.ListAllAsync(
+                session.Project,
+                int.MaxValue,
+                OpenTokFs.OpenTokSessionId.NewId(sessionId));
+            foreach (var b in broadcasts) {
+                await OpenTokFs.Api.Broadcast.SetLayoutAsync(session.Project, b.Id, l);
+            }
+            var archives = await OpenTokFs.Api.Archive.ListAllAfterAsync(
+               session.Project,
+               DateTimeOffset.UtcNow.AddDays(-1),
+               OpenTokFs.OpenTokSessionId.NewId(sessionId));
+            foreach (var a in archives) {
+                if (a.Status == "started" || a.Status == "paused") {
+                    await OpenTokFs.Api.Archive.SetLayoutAsync(session.Project, a.Id, l);
+                }
+            }
+            return NoContent();
+        }
+
         [HttpGet]
         public async Task<IActionResult> ListArchives(string sessionId, int max) {
             var session = await _context.VonageVideoAPISessions.Include(x => x.Project).Where(x => x.SessionId == sessionId).SingleAsync();

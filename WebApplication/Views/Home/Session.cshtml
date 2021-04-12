@@ -130,6 +130,28 @@
 
 <hr />
 
+<hr />
+
+<iframe src="about:blank" name="miniframe2" style="float: right; resize: both" width="320" height="90"></iframe>
+
+<form asp-controller="Home" asp-action="ChangeLayout" asp-route-sessionId="@Model.SessionId" target="miniframe2">
+    Change layout for all existing broadcasts and archives:
+    <label>
+        Layout
+        <select name="layout">
+            <option>Best Fit</option>
+            <option>Picture-in-Picture</option>
+            <option>Vertical Presentation</option>
+            <option>Horizontal Presentation</option>
+        </select>
+    </label>
+    <label>
+        Or use custom layout CSS (URL):
+        <input name="layoutCss" type="url" />
+    </label>
+    <input type="submit" value="Set new layout" />
+</form>
+
 <div id="container">
 
 </div>
