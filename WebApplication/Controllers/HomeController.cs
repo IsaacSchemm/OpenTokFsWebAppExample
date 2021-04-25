@@ -8,6 +8,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using WebApplication.Models;
 
+using R = OpenTokFs.RequestDomain;
+
 namespace WebApplication.Controllers {
     public class HomeController : Controller {
         private readonly ExampleDbContext _context;
@@ -33,6 +35,9 @@ namespace WebApplication.Controllers {
 
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> ForgetProject(int id) {
+            var sessions = await _context.VonageVideoAPISessions.Where(x => x.Project.ApiKey == id).ToListAsync();
+            _context.VonageVideoAPISessions.RemoveRange(sessions);
+
             var project = await _context.VonageVideoAPIProjectCredentials.Where(x => x.ApiKey == id).SingleAsync();
             _context.VonageVideoAPIProjectCredentials.Remove(project);
             await _context.SaveChangesAsync();
@@ -88,19 +93,27 @@ namespace WebApplication.Controllers {
             string resolution
         ) {
             var session = await _context.VonageVideoAPISessions.Include(x => x.Project).Where(x => x.SessionId == sessionId).SingleAsync();
-            await OpenTokFs.Api.Archive.StartAsync(session.Project, new OpenTokFs.RequestTypes.OpenTokArchiveStartRequest(sessionId) {
-                HasAudio = hasAudio,
-                HasVideo = hasVideo,
-                Layout = !string.IsNullOrEmpty(layoutCss) ? OpenTokFs.RequestTypes.OpenTokVideoLayout.Custom(layoutCss)
-                    : layout == "Best Fit" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.BestFit
-                    : layout == "Picture-in-Picture" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.Pip
-                    : layout == "Vertical Presentation" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.VerticalPresentation
-                    : layout == "Horizontal Presentation" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.HorizontalPresentation
-                    : OpenTokFs.RequestTypes.OpenTokVideoLayout.BestFit,
-                Name = name,
-                OutputMode = composed ? "composed" : "individual",
-                Resolution = resolution
-            });
+            await OpenTokFs.Api.Archive.StartAsync(session.Project, new R.ArchiveStartRequest(
+                sessionId,
+                new R.ArchiveStartParameters(
+                    hasAudio: hasAudio,
+                    hasVideo: hasVideo,
+                    name: string.IsNullOrWhiteSpace(name)
+                        ? R.ArchiveName.NoArchiveName
+                        : R.ArchiveName.NewCustomArchiveName(name),
+                    outputType: !composed
+                        ? R.OutputType.Individual
+                        : R.OutputType.NewComposed(
+                            resolution == "1280x720"
+                                ? R.Resolution.HD
+                                : R.Resolution.SD,
+                            !string.IsNullOrWhiteSpace(layoutCss)
+                                ? R.Layout.NewCustomCss(layoutCss)
+                                : R.Layout.NewBuiltIn(layout == "Best Fit" ? R.LayoutType.BestFit
+                                    : layout == "Picture-in-Picture" ? R.LayoutType.PIP
+                                    : layout == "Vertical Presentation" ? R.LayoutType.VerticalPresentation
+                                    : layout == "Horizontal Presentation" ? R.LayoutType.HorizontalPresentation
+                                    : R.LayoutType.BestFit)))));
             return NoContent();
         }
 
@@ -122,7 +135,7 @@ namespace WebApplication.Controllers {
 
                     if (stopped.Url == null)
                         return Content("Archive stopped, but URL not available");
-                    else if (stopped.Url.EndsWith(".mp4", StringComparison.InvariantCultureIgnoreCase))
+                    else if (stopped.Url.Contains("archive.mp4", StringComparison.InvariantCultureIgnoreCase))
                         return Redirect(stopped.Url);
                     else
                         return Content(stopped.Url, "text/plain");

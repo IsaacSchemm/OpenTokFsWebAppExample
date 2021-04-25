@@ -42,8 +42,8 @@
         </select>
     </label>
     <label>
-        Or use custom layout CSS (URL):
-        <input name="layoutCss" type="url" />
+        Or use custom layout CSS:
+        <textarea name="layoutCss" style="resize: both"></textarea>
     </label>
     <label>
         Name
@@ -76,7 +76,7 @@
     <input name="sessionId" value="@Model.SessionId" type="hidden" />
     <label>
         Maximum
-        <input name="max" type="number" min="10" max="@(int.MaxValue)" />
+        <input name="max" type="number" min="10" max="@(int.MaxValue)" value="10" />
     </label>
     <input type="submit" value="List archives" />
 </form>
