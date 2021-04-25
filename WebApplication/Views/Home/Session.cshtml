@@ -146,6 +146,15 @@
         </select>
     </label>
     <label>
+        Or use Best Fit when screen share is inactive, and when it's active use:
+        <select name="screenSharingLayout">
+            <option></option>
+            <option>Picture-in-Picture</option>
+            <option>Vertical Presentation</option>
+            <option>Horizontal Presentation</option>
+        </select>
+    </label>
+    <label>
         Or use custom layout CSS (URL):
         <input name="layoutCss" type="url" />
     </label>
@@ -235,6 +244,16 @@
                 document.body.removeChild(button);
             });
             document.body.appendChild(button);
+
+            if (videoSource === "screen") {
+                const resp = await fetch({
+                    method: "POST",
+                    url: `/Home/MakeBig?sessionId=${session.id}&streamId=${publisher.stream.id}`
+                });
+                if (!resp.ok) {
+                    alert("Could not assign full and focus classes to stream");
+                }
+            }
         } catch (e) {
             console.error(e);
         }

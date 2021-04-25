@@ -1,14 +1,13 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using OpenTokFs.RequestDomain;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using WebApplication.Models;
-
-using R = OpenTokFs.RequestDomain;
 
 namespace WebApplication.Controllers {
     public class HomeController : Controller {
@@ -53,7 +52,7 @@ namespace WebApplication.Controllers {
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> AddSessionPost(int projectId) {
             var project = await _context.VonageVideoAPIProjectCredentials.Where(x => x.ApiKey == projectId).SingleAsync();
-            var session = await OpenTokFs.Api.Session.CreateAsync(project, new OpenTokFs.Api.Session.CreationParameters());
+            var session = await OpenTokFs.Api.Session.CreateAsync(project, NewSession.Default);
             _context.VonageVideoAPISessions.Add(new VonageVideoAPISession {
                 Project = project,
                 SessionId = session.Session_id
@@ -93,27 +92,25 @@ namespace WebApplication.Controllers {
             string resolution
         ) {
             var session = await _context.VonageVideoAPISessions.Include(x => x.Project).Where(x => x.SessionId == sessionId).SingleAsync();
-            await OpenTokFs.Api.Archive.StartAsync(session.Project, new R.ArchiveStartRequest(
+            await OpenTokFs.Api.Archive.StartAsync(session.Project, new ArchiveStartRequest(
                 sessionId,
-                new R.ArchiveStartParameters(
-                    hasAudio: hasAudio,
-                    hasVideo: hasVideo,
-                    name: string.IsNullOrWhiteSpace(name)
-                        ? R.ArchiveName.NoArchiveName
-                        : R.ArchiveName.NewCustomArchiveName(name),
-                    outputType: !composed
-                        ? R.OutputType.Individual
-                        : R.OutputType.NewComposed(
-                            resolution == "1280x720"
-                                ? R.Resolution.HD
-                                : R.Resolution.SD,
-                            !string.IsNullOrWhiteSpace(layoutCss)
-                                ? R.Layout.NewCustomCss(layoutCss)
-                                : R.Layout.NewBuiltIn(layout == "Best Fit" ? R.LayoutType.BestFit
-                                    : layout == "Picture-in-Picture" ? R.LayoutType.PIP
-                                    : layout == "Vertical Presentation" ? R.LayoutType.VerticalPresentation
-                                    : layout == "Horizontal Presentation" ? R.LayoutType.HorizontalPresentation
-                                    : R.LayoutType.BestFit)))));
+                hasAudio: hasAudio,
+                hasVideo: hasVideo,
+                name: string.IsNullOrWhiteSpace(name)
+                    ? ArchiveNameSetting.NoArchiveName
+                    : ArchiveNameSetting.NewArchiveName(name),
+                outputType: !composed
+                    ? ArchiveOutputType.IndividualArchive
+                    : ArchiveOutputType.NewComposedArchive(
+                        resolution == "1280x720"
+                            ? Resolution.HighDefinition
+                            : Resolution.StandardDefinition,
+                        !string.IsNullOrWhiteSpace(layoutCss) ? Layout.NewCustomCss(layoutCss)
+                            : layout == "Best Fit" ? Layout.NewLayoutType(LayoutType.BestFit)
+                            : layout == "Picture-in-Picture" ? Layout.NewLayoutType(LayoutType.Pip)
+                            : layout == "Vertical Presentation" ? Layout.NewLayoutType(LayoutType.VerticalPresentation)
+                            : layout == "Horizontal Presentation" ? Layout.NewLayoutType(LayoutType.HorizontalPresentation)
+                            : Layout.NewLayoutType(LayoutType.BestFit))));
             return NoContent();
         }
 
@@ -123,7 +120,7 @@ namespace WebApplication.Controllers {
             var archives = await OpenTokFs.Api.Archive.ListAllAfterAsync(
                 session.Project,
                 DateTimeOffset.UtcNow.AddDays(-1),
-                OpenTokFs.OpenTokSessionId.NewId(sessionId));
+                SessionIdFilter.NewSingleSessionId(sessionId));
             foreach (var a in archives) {
                 if (a.Status == "started" || a.Status == "paused") {
                     var stopped = await OpenTokFs.Api.Archive.StopAsync(session.Project, a.Id);
@@ -159,26 +156,22 @@ namespace WebApplication.Controllers {
             var broadcasts = await OpenTokFs.Api.Broadcast.ListAllAsync(
                 session.Project,
                 int.MaxValue,
-                OpenTokFs.OpenTokSessionId.NewId(sessionId));
+                SessionIdFilter.NewSingleSessionId(sessionId));
             var broadcast = broadcasts.SingleOrDefault();
             if (broadcast == null) {
-                var req = new OpenTokFs.RequestTypes.OpenTokBroadcastStartRequest(sessionId) {
-                    Layout = !string.IsNullOrEmpty(layoutCss) ? OpenTokFs.RequestTypes.OpenTokVideoLayout.Custom(layoutCss)
-                            : layout == "Best Fit" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.BestFit
-                            : layout == "Picture-in-Picture" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.Pip
-                            : layout == "Vertical Presentation" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.VerticalPresentation
-                            : layout == "Horizontal Presentation" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.HorizontalPresentation
-                            : OpenTokFs.RequestTypes.OpenTokVideoLayout.BestFit,
-                    Duration = TimeSpan.FromSeconds(maxDuration),
-                    Hls = hls,
-                    Resolution = resolution,
-                    Rtmp = new[] {
-                            new OpenTokFs.RequestTypes.OpenTokRtmpDestination {
-                                ServerUrl = rtmpServerUrl,
-                                StreamName = rtmpStreamName
-                            }
-                        }.Where(x => !string.IsNullOrEmpty(x.ServerUrl) && !string.IsNullOrEmpty(x.StreamName))
-                };
+                var req = new BroadcastStartRequest(
+                    sessionId: sessionId,
+                    layout: !string.IsNullOrWhiteSpace(layoutCss) ? Layout.NewCustomCss(layoutCss)
+                            : layout == "Best Fit" ? Layout.NewLayoutType(LayoutType.BestFit)
+                            : layout == "Picture-in-Picture" ? Layout.NewLayoutType(LayoutType.Pip)
+                            : layout == "Vertical Presentation" ? Layout.NewLayoutType(LayoutType.VerticalPresentation)
+                            : layout == "Horizontal Presentation" ? Layout.NewLayoutType(LayoutType.HorizontalPresentation)
+                            : Layout.NewLayoutType(LayoutType.BestFit),
+                    maxDuration: TimeSpan.FromSeconds(maxDuration),
+                    outputs: hls
+                        ? BroadcastTargets.HlsOnly
+                        : BroadcastTargets.RtmpOnly(rtmpServerUrl, rtmpStreamName),
+                    resolution: resolution == "1280x720" ? Resolution.HighDefinition : Resolution.StandardDefinition);
                 string json = Newtonsoft.Json.JsonConvert.SerializeObject(req);
                 broadcast = await OpenTokFs.Api.Broadcast.StartAsync(
                     session.Project,
@@ -193,7 +186,7 @@ namespace WebApplication.Controllers {
             var broadcasts = await OpenTokFs.Api.Broadcast.ListAllAsync(
                 session.Project,
                 int.MaxValue,
-                OpenTokFs.OpenTokSessionId.NewId(sessionId));
+                SessionIdFilter.NewSingleSessionId(sessionId));
             foreach (var b in broadcasts) {
                 await OpenTokFs.Api.Broadcast.StopAsync(session.Project, b.Id);
             }
@@ -201,30 +194,45 @@ namespace WebApplication.Controllers {
         }
 
         [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> ChangeLayout(string sessionId, string layout, string layoutCss) {
-            var l = !string.IsNullOrEmpty(layoutCss) ? OpenTokFs.RequestTypes.OpenTokVideoLayout.Custom(layoutCss)
-                    : layout == "Best Fit" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.BestFit
-                    : layout == "Picture-in-Picture" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.Pip
-                    : layout == "Vertical Presentation" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.VerticalPresentation
-                    : layout == "Horizontal Presentation" ? OpenTokFs.RequestTypes.OpenTokVideoLayout.HorizontalPresentation
-                    : OpenTokFs.RequestTypes.OpenTokVideoLayout.BestFit;
+        public async Task<IActionResult> ChangeLayout(string sessionId, string layout, string screenSharingLayout, string layoutCss) {
+            var l = !string.IsNullOrWhiteSpace(layoutCss) ? Layout.NewCustomCss(layoutCss)
+                    : screenSharingLayout == "Picture-in-Picture" ? Layout.NewBestFitOr(ScreenshareType.NewScreenshareType(LayoutType.Pip))
+                    : screenSharingLayout == "Vertical Presentation" ? Layout.NewBestFitOr(ScreenshareType.NewScreenshareType(LayoutType.VerticalPresentation))
+                    : screenSharingLayout == "Horizontal Presentation" ? Layout.NewBestFitOr(ScreenshareType.NewScreenshareType(LayoutType.HorizontalPresentation))
+                    : layout == "Best Fit" ? Layout.NewLayoutType(LayoutType.BestFit)
+                    : layout == "Picture-in-Picture" ? Layout.NewLayoutType(LayoutType.Pip)
+                    : layout == "Vertical Presentation" ? Layout.NewLayoutType(LayoutType.VerticalPresentation)
+                    : layout == "Horizontal Presentation" ? Layout.NewLayoutType(LayoutType.HorizontalPresentation)
+                    : Layout.NewLayoutType(LayoutType.BestFit);
             var session = await _context.VonageVideoAPISessions.Include(x => x.Project).Where(x => x.SessionId == sessionId).SingleAsync();
             var broadcasts = await OpenTokFs.Api.Broadcast.ListAllAsync(
                 session.Project,
                 int.MaxValue,
-                OpenTokFs.OpenTokSessionId.NewId(sessionId));
+                SessionIdFilter.NewSingleSessionId(sessionId));
             foreach (var b in broadcasts) {
                 await OpenTokFs.Api.Broadcast.SetLayoutAsync(session.Project, b.Id, l);
             }
             var archives = await OpenTokFs.Api.Archive.ListAllAfterAsync(
                session.Project,
                DateTimeOffset.UtcNow.AddDays(-1),
-               OpenTokFs.OpenTokSessionId.NewId(sessionId));
+               SessionIdFilter.NewSingleSessionId(sessionId));
             foreach (var a in archives) {
                 if (a.Status == "started" || a.Status == "paused") {
                     await OpenTokFs.Api.Archive.SetLayoutAsync(session.Project, a.Id, l);
                 }
             }
+            return NoContent();
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> MakeBig(string sessionId, string streamId) {
+            var session = await _context.VonageVideoAPISessions.Include(x => x.Project).Where(x => x.SessionId == sessionId).SingleAsync();
+            await OpenTokFs.Api.Session.SetLayoutClassesAsync(
+                session.Project,
+                session.SessionId,
+                new LayoutClassChangeRequest(new [] {
+                    new LayoutClassChangeItem(streamId, new[] {"full", "focus"})
+                }));
             return NoContent();
         }
 
@@ -234,7 +242,7 @@ namespace WebApplication.Controllers {
             var archives = await OpenTokFs.Api.Archive.ListAllAsync(
                 session.Project,
                 max,
-                OpenTokFs.OpenTokSessionId.NewId(sessionId));
+                SessionIdFilter.NewSingleSessionId(sessionId));
             return Ok(archives);
         }
     }
