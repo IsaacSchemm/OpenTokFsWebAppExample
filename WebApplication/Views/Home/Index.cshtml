@@ -4,6 +4,22 @@
     ViewData["Title"] = "Projects";
 }
 
+<p>Create project:</p>
+
+<form asp-controller="Home" asp-action="CreateProjectPost" method="post">
+    <label>
+        Account API key
+        <input type="text" name="key" />
+    </label>
+    <label>
+        Account API secret
+        <input type="text" name="secret" />
+    </label>
+    <input type="submit" />
+</form>
+
+<hr />
+
 <p>Add project:</p>
 
 <form asp-controller="Home" asp-action="AddProjectPost" method="post">

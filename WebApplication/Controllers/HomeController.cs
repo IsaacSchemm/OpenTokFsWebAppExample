@@ -23,6 +23,18 @@ namespace WebApplication.Controllers {
         }
 
         [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> CreateProjectPost(int key, string secret) {
+            var credentials = new OpenTokFs.Credentials.AccountCredentials(key, secret);
+            var project = await OpenTokFs.Api.Project.CreateAsync(credentials, ProjectName.NoProjectName);
+            _context.VonageVideoAPIProjectCredentials.Add(new VonageVideoAPIProjectCredential {
+                ApiKey = project.Id,
+                ApiSecret = project.Secret
+            });
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Index));
+        }
+
+        [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> AddProjectPost(int key, string secret) {
             _context.VonageVideoAPIProjectCredentials.Add(new VonageVideoAPIProjectCredential {
                 ApiKey = key,
@@ -97,8 +109,8 @@ namespace WebApplication.Controllers {
                 hasAudio: hasAudio,
                 hasVideo: hasVideo,
                 name: string.IsNullOrWhiteSpace(name)
-                    ? ArchiveNameSetting.NoArchiveName
-                    : ArchiveNameSetting.NewArchiveName(name),
+                    ? ArchiveName.NoArchiveName
+                    : ArchiveName.NewCustomArchiveName(name),
                 outputType: !composed
                     ? ArchiveOutputType.IndividualArchive
                     : ArchiveOutputType.NewComposedArchive(
@@ -106,22 +118,27 @@ namespace WebApplication.Controllers {
                             ? Resolution.HighDefinition
                             : Resolution.StandardDefinition,
                         !string.IsNullOrWhiteSpace(layoutCss) ? Layout.NewCustomCss(layoutCss)
-                            : layout == "Best Fit" ? Layout.NewLayoutType(LayoutType.BestFit)
-                            : layout == "Picture-in-Picture" ? Layout.NewLayoutType(LayoutType.Pip)
-                            : layout == "Vertical Presentation" ? Layout.NewLayoutType(LayoutType.VerticalPresentation)
-                            : layout == "Horizontal Presentation" ? Layout.NewLayoutType(LayoutType.HorizontalPresentation)
-                            : Layout.NewLayoutType(LayoutType.BestFit))));
+                            : layout == "Best Fit" ? Layout.NewStandard(StandardLayout.BestFit)
+                            : layout == "Picture-in-Picture" ? Layout.NewStandard(StandardLayout.Pip)
+                            : layout == "Vertical Presentation" ? Layout.NewStandard(StandardLayout.VerticalPresentation)
+                            : layout == "Horizontal Presentation" ? Layout.NewStandard(StandardLayout.HorizontalPresentation)
+                            : Layout.NewStandard(StandardLayout.BestFit))));
             return NoContent();
         }
+
+        private static readonly ListParameters SingleItem = new ListParameters(
+            new PageBoundaries(0, 1),
+            ListLimit.NewStopAtItemCount(1));
 
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> StopArchive(string sessionId) {
             var session = await _context.VonageVideoAPISessions.Include(x => x.Project).Where(x => x.SessionId == sessionId).SingleAsync();
-            var archives = await OpenTokFs.Api.Archive.ListAllAfterAsync(
+            var archives = await OpenTokFs.Api.Archive.ListAllAsync(
                 session.Project,
-                DateTimeOffset.UtcNow.AddDays(-1),
+                SingleItem,
                 SessionIdFilter.NewSingleSessionId(sessionId));
-            foreach (var a in archives) {
+            var a = archives.SingleOrDefault();
+            if (a != null) {
                 if (a.Status == "started" || a.Status == "paused") {
                     var stopped = await OpenTokFs.Api.Archive.StopAsync(session.Project, a.Id);
 
@@ -155,18 +172,18 @@ namespace WebApplication.Controllers {
             var session = await _context.VonageVideoAPISessions.Include(x => x.Project).Where(x => x.SessionId == sessionId).SingleAsync();
             var broadcasts = await OpenTokFs.Api.Broadcast.ListAllAsync(
                 session.Project,
-                int.MaxValue,
+                SingleItem,
                 SessionIdFilter.NewSingleSessionId(sessionId));
             var broadcast = broadcasts.SingleOrDefault();
             if (broadcast == null) {
                 var req = new BroadcastStartRequest(
                     sessionId: sessionId,
                     layout: !string.IsNullOrWhiteSpace(layoutCss) ? Layout.NewCustomCss(layoutCss)
-                            : layout == "Best Fit" ? Layout.NewLayoutType(LayoutType.BestFit)
-                            : layout == "Picture-in-Picture" ? Layout.NewLayoutType(LayoutType.Pip)
-                            : layout == "Vertical Presentation" ? Layout.NewLayoutType(LayoutType.VerticalPresentation)
-                            : layout == "Horizontal Presentation" ? Layout.NewLayoutType(LayoutType.HorizontalPresentation)
-                            : Layout.NewLayoutType(LayoutType.BestFit),
+                            : layout == "Best Fit" ? Layout.NewStandard(StandardLayout.BestFit)
+                            : layout == "Picture-in-Picture" ? Layout.NewStandard(StandardLayout.Pip)
+                            : layout == "Vertical Presentation" ? Layout.NewStandard(StandardLayout.VerticalPresentation)
+                            : layout == "Horizontal Presentation" ? Layout.NewStandard(StandardLayout.HorizontalPresentation)
+                            : Layout.NewStandard(StandardLayout.BestFit),
                     maxDuration: TimeSpan.FromSeconds(maxDuration),
                     outputs: hls
                         ? BroadcastTargets.HlsOnly
@@ -185,9 +202,10 @@ namespace WebApplication.Controllers {
             var session = await _context.VonageVideoAPISessions.Include(x => x.Project).Where(x => x.SessionId == sessionId).SingleAsync();
             var broadcasts = await OpenTokFs.Api.Broadcast.ListAllAsync(
                 session.Project,
-                int.MaxValue,
+                SingleItem,
                 SessionIdFilter.NewSingleSessionId(sessionId));
-            foreach (var b in broadcasts) {
+            var b = broadcasts.SingleOrDefault();
+            if (b != null){
                 await OpenTokFs.Api.Broadcast.StopAsync(session.Project, b.Id);
             }
             return View("Player", null);
@@ -196,25 +214,25 @@ namespace WebApplication.Controllers {
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> ChangeLayout(string sessionId, string layout, string screenSharingLayout, string layoutCss) {
             var l = !string.IsNullOrWhiteSpace(layoutCss) ? Layout.NewCustomCss(layoutCss)
-                    : screenSharingLayout == "Picture-in-Picture" ? Layout.NewBestFitOr(ScreenshareType.NewScreenshareType(LayoutType.Pip))
-                    : screenSharingLayout == "Vertical Presentation" ? Layout.NewBestFitOr(ScreenshareType.NewScreenshareType(LayoutType.VerticalPresentation))
-                    : screenSharingLayout == "Horizontal Presentation" ? Layout.NewBestFitOr(ScreenshareType.NewScreenshareType(LayoutType.HorizontalPresentation))
-                    : layout == "Best Fit" ? Layout.NewLayoutType(LayoutType.BestFit)
-                    : layout == "Picture-in-Picture" ? Layout.NewLayoutType(LayoutType.Pip)
-                    : layout == "Vertical Presentation" ? Layout.NewLayoutType(LayoutType.VerticalPresentation)
-                    : layout == "Horizontal Presentation" ? Layout.NewLayoutType(LayoutType.HorizontalPresentation)
-                    : Layout.NewLayoutType(LayoutType.BestFit);
+                    : screenSharingLayout == "Picture-in-Picture" ? Layout.NewBestFitOr(ScreenshareType.NewScreenshareType(StandardLayout.Pip))
+                    : screenSharingLayout == "Vertical Presentation" ? Layout.NewBestFitOr(ScreenshareType.NewScreenshareType(StandardLayout.VerticalPresentation))
+                    : screenSharingLayout == "Horizontal Presentation" ? Layout.NewBestFitOr(ScreenshareType.NewScreenshareType(StandardLayout.HorizontalPresentation))
+                    : layout == "Best Fit" ? Layout.NewStandard(StandardLayout.BestFit)
+                    : layout == "Picture-in-Picture" ? Layout.NewStandard(StandardLayout.Pip)
+                    : layout == "Vertical Presentation" ? Layout.NewStandard(StandardLayout.VerticalPresentation)
+                    : layout == "Horizontal Presentation" ? Layout.NewStandard(StandardLayout.HorizontalPresentation)
+                    : Layout.NewStandard(StandardLayout.BestFit);
             var session = await _context.VonageVideoAPISessions.Include(x => x.Project).Where(x => x.SessionId == sessionId).SingleAsync();
             var broadcasts = await OpenTokFs.Api.Broadcast.ListAllAsync(
                 session.Project,
-                int.MaxValue,
+                SingleItem,
                 SessionIdFilter.NewSingleSessionId(sessionId));
             foreach (var b in broadcasts) {
                 await OpenTokFs.Api.Broadcast.SetLayoutAsync(session.Project, b.Id, l);
             }
-            var archives = await OpenTokFs.Api.Archive.ListAllAfterAsync(
+            var archives = await OpenTokFs.Api.Archive.ListAllAsync(
                session.Project,
-               DateTimeOffset.UtcNow.AddDays(-1),
+               SingleItem,
                SessionIdFilter.NewSingleSessionId(sessionId));
             foreach (var a in archives) {
                 if (a.Status == "started" || a.Status == "paused") {
@@ -241,7 +259,9 @@ namespace WebApplication.Controllers {
             var session = await _context.VonageVideoAPISessions.Include(x => x.Project).Where(x => x.SessionId == sessionId).SingleAsync();
             var archives = await OpenTokFs.Api.Archive.ListAllAsync(
                 session.Project,
-                max,
+                new ListParameters(
+                    new PageBoundaries(0, Math.Min(1000, max)),
+                    ListLimit.NewStopAtItemCount(max)),
                 SessionIdFilter.NewSingleSessionId(sessionId));
             return Ok(archives);
         }
